@@ -1,0 +1,291 @@
+---
+title: "Project pt2"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+sales_raw <- read.csv('vgsales.csv')
+```
+
+# Introduction
+
+The Dataset I am using for this project is on video game sales data taken from Gregory Smith on [Kaggle](https://www.kaggle.com/datasets/gregorut/videogamesales). Gregory's data was scraped from a website called vgchartz and features a list of video games that have sold over 100,000 copies. Included in this data is:
+
+-   Name - the name of the video game
+-   Platform - the original console the game released on
+-   Genre - what type of video game it is
+-   Publisher - who made the game
+-   NA/EU/JP/Other_Sales - the number of copies sold in North America/Europe/Japan/rest of the world (in millions)
+-   Global_Sales - the total number of copies sold (in millions)
+
+# The Console Wars
+
+the Gaming market for most of it's lifetime has comprised of different companies producing their own devices that are dedicated to video games. Probably the most well known earliest examples of a gaming console is the Nintendo Entertainment System (NES; originally called the Famicom in Japan) produced by Nintendo in 1985 in the US (1983 in Japan). Since then, there have been a variety of other companies who have produced their own game consoles, such as Sony with the Play Station, Microsoft with the Xbox. There are even some companies that once produced consoles that are no longer doing such, with examples being SEGA and Atari.
+
+However, as computers were becoming more affordable for the average household, people began to develop games that no longer required a dedicated piece of hardware to play, with some of the best examples of early PC exclusive games being 1993's DOOM and 1998's Half-Life. Despite this, consoles still remain a preferred choice for many people as a more affordable way to casually play video games, whereas PC gaming is the preferred option for most hardcore gamers as it allows you to have much more control over your device.
+
+This then begs the question, do video games sell more copies on Consoles than on PC? That is to say, if I were to release a video game that could only be played on PC, would I be losing a huge audience of players because it is not available to play on console or would my game sell as well as it would if it was only on console?
+
+This means that the null hypothesis for this study would be: $$H_{0}: \mu_{console} = \mu_{pc}$$
+
+and that the Alternative hypothesis would be: $$H_{A}: \mu_{console} > \mu_{pc}$$
+
+For this particular Dataset, I would be looking at the Global_Sales by Platform (after some cleaning). Since the outcome of the sales figures is merely observed data, this study is simply a survey. The parameter for this study would be the total average global sales for video games based on whether they were console or pc, while the statistic for this study is the average of global video game sales for games that sold over 100,000 copies
+
+# Exploring the Data
+
+## Setting up the study
+
+```{r}
+head(sales_raw)
+```
+
+As you can see, the Platform column does us no good for the time being as it lists the console the game released on, when all we need for this study is if it was on console or not.
+
+to do this, I'm going to filter for games on PC and save them into their own dataset, and then take all non-PC games and store them into their own dataset. First let's check to see if there is any missing data.
+
+```{r}
+sum(is.na(sales_raw))
+```
+
+One thing I noticed as I was going through the data was that some games were listed multiple times, and in the example below, That being on of my favorite games in recent memory, Resident Evil 4, having different years as well. The year difference is likely caused by the time required to port games to different hardware. Because there are multiple versions of the same game on different consoles, I will be taking that into account when I change the Platform variable into a Binary categorical variable.
+
+```{r}
+sales_raw %>% 
+  filter(Name == 'Resident Evil 4')
+```
+
+Here I am taking all of the PC games and saving them to their own dataframe. I also dropped the year column from the data. I did this because of the mismatch of years for some games in the console category (as seen above.) I was already planning to not look too much into the year, so I am just dropping the row now.
+
+```{r}
+pc_sales <- sales_raw %>% 
+  filter(Platform == 'PC') %>%
+  select(Name, Platform, Genre, Publisher, NA_Sales, EU_Sales, JP_Sales, Other_Sales, Global_Sales)
+pc_sales
+```
+
+Now I am doing the same for the console games, however because of the same game being released on multiple consoles, after I change the Platform variable, I then needed to add the sales of the games together. To do this, I grouped by everything other than year (since all of the other data should be the same) and then summed all of the sales figures. I have this saved as console_sales1 because I noticed after summing the sales data, there was game called Reminisce that had a row for just it's Japanese sales, so I took care of that and then saved it as just console_sales later.
+
+```{r}
+console_sales1 <- sales_raw %>% 
+  filter(Platform != 'PC') %>% 
+  mutate(Platform = "Console") %>%
+  select(Name, Platform, Year, Genre, Publisher, NA_Sales, EU_Sales, JP_Sales, Other_Sales, Global_Sales) %>% 
+  group_by(Name, Platform, Genre, Publisher) %>% 
+  summarise(NA_Sales = sum(NA_Sales),
+            EU_Sales = sum(EU_Sales),
+            JP_Sales = sum(JP_Sales),
+            Other_Sales = sum(Other_Sales),
+            Global_Sales = sum(Global_Sales), .groups = 'drop')
+console_sales1
+```
+
+```{r}
+reminisce <- console_sales1 %>% 
+  filter(Name == c('.hack//G.U. Vol.2//Reminisce','.hack//G.U. Vol.2//Reminisce (jp sales)')) %>% 
+  mutate(Name = '.hack//G.U. Vol.2//Reminisce') %>% 
+  select(Name, Platform, Genre, Publisher, NA_Sales, EU_Sales, JP_Sales, Other_Sales, Global_Sales) %>% 
+  group_by(Name, Platform, Genre, Publisher) %>% 
+  summarise(NA_Sales = sum(NA_Sales),
+            EU_Sales = sum(EU_Sales),
+            JP_Sales = sum(JP_Sales),
+            Other_Sales = sum(Other_Sales),
+            Global_Sales = sum(Global_Sales), .groups = 'drop')
+console_sales2 <- console_sales1 %>%
+  filter(Name != c('.hack//G.U. Vol.2//Reminisce','.hack//G.U. Vol.2//Reminisce (jp sales)'))
+
+console_sales <- rbind(console_sales2, reminisce)
+```
+
+Now that the data is ready for the study, I combined both the PC and Console data together to form a single Dataframe.
+
+```{r}
+vgsales <- rbind(console_sales, pc_sales)
+vgsales %>% 
+  group_by(Platform) %>% 
+  summarise(n = n())
+```
+
+Now that I have the data set up properly, I'm going to filter for just the sales data, the name of the game, and the platform type. I will mostly be using the global sales data, but I will be keeping the data for each region as well since it gives us a good breakdown of where the games sold.
+
+```{r}
+vgsales <- vgsales %>% 
+  select(Name, Platform, NA_Sales, EU_Sales, JP_Sales, Other_Sales, Global_Sales)
+head(vgsales)
+```
+
+## Visualing the data
+
+```{r}
+ggplot(mapping = aes(x = vgsales$Platform)) +
+  geom_bar() +
+  xlab('Platform type')
+```
+
+It is interesting to note that there a lot more Console games than there are PC games. This is likely due to the fact that it is easier for a game to reach 100,000 copies sold on console than on PC, as the market is so much broader.
+
+Let's look at the summary stats for all of the sales figures.
+
+```{r}
+summary(vgsales)
+```
+
+I find it interesting that the minimum value for all of the sales except global is 0. This likely means that there are games that performed well in other countries but sold no copies in others. Another interesting thing of note is that the minimum Global sales is 0.01, Since the data is in millions, this means that the minimum copies sold is 10,000. This is something that doesn't make a whole lot of sense to me as the minimum should be at the very least 0.1 as the dataset is described by the author as being only games that have sold more than 100,000 copies. While this probably won't have an effect on our test, it does change our statistic slightly. Because now we are not dealing with a sample of games that have sold over 100,000 copies, but rather just this sample of 12375 games.
+
+### Outlier Rabbit Hole
+
+```{r}
+vgsales %>% 
+ggplot(mapping = aes(x = Global_Sales))+
+  geom_boxplot()
+```
+
+This is extremely interesting, what this box plot reveals is that there are a whole lot of outliers in the global sales data
+
+```{r}
+hist(vgsales$Global_Sales, xlab = 'Global sales (in millions)')
+```
+
+even the histogram shows that there are some major outliers in the data, and that a majority of the data is under 20 million copies sold. Let's take a look at the highest selling game.
+
+```{r}
+vgsales %>% 
+  filter(Global_Sales == max(Global_Sales))
+```
+
+Now this explains it, Wii Sports was a pack-in included with the Nintendo Wii, meaning that for every Wii sold, a copy of Wii Sports was also sold. Since this is a pack-in game, it's probably safe to drop it from the data, as it was not a game that people could buy in the same way as other games in the data. If there are still many outliers after dropping Wii Sports, I will filter that data once more.
+
+```{r}
+vgsales <- vgsales %>% 
+  filter(Name != 'Wii Sports')
+hist(vgsales$Global_Sales, xlab = 'Global sales (in millions)')
+
+```
+
+Since there still appears to be many outliers in the data, I will filter for all games that sold under 10 Million copies
+
+```{r}
+vgsales <- vgsales %>% 
+  filter(Global_Sales < 10.0)
+summary(vgsales)
+```
+
+As you can see, filtering out those games removed about 100 entries from the dataframe, meaning that now our statistic is the average global sales of 12284 games that sold under 10 million copies.
+
+```{r}
+hist(vgsales$Global_Sales, xlab = 'Global sales (in millions)')
+```
+
+Even then, the data is still heavily right skewed. This could mean one of 2 things.
+
+1.  it is unlikely that a game will sell more than 1 million copies.
+2.  The Data isn't being processed correctly after combining the consoles together.
+
+To double check, here is the completed data frame filtered with the example game from earlier
+
+```{r}
+vgsales %>% 
+  filter(Name == 'Resident Evil 4')
+```
+
+So the data is being combined correctly, So that means it is just unlikely for a majority of games to sell more than 1 million copies. If that was the nature of this study, I would dive into it more, but seeing as we're interested in the difference between console and PC sales, we'll stop here.
+
+## Relationship between Global Sales and Platform
+
+```{r}
+vgsales %>% 
+  ggplot(mapping = aes(x = Global_Sales, y = Platform)) +
+  geom_boxplot()
+```
+
+Looking at the boxplot for each of the platforms, it's clear that both types have their fair share of outliers, however the IQR of consoles appears to be way bigger than that of the PC games. This is likely due to the fact that there are way more Console games than PC games. The Median also appears to be way smaller for PC games than it is for Console games.
+
+```{r}
+vgsales %>%
+  group_by(Platform) %>% 
+  summarize(mean = mean(Global_Sales), median = median(Global_Sales), std = sd(Global_Sales), IQR = IQR(Global_Sales), minimum = min(Global_Sales), maximum = max(Global_Sales), count = n())
+```
+
+# Permutation Test
+Since we want to take a look at the sales for both console and PC games, we'll want to take a look at the difference in their means. This means our Null hypothesis is: $$H_{0}: \mu_{console} - \mu_{pc} = 0$$
+and our Alternative hypothesis is: $$H_{A}: \mu_{console} - \mu_{pc} \ne 0$$
+```{r}
+PC <- vgsales %>%
+  filter(Platform == 'PC') %>% 
+  pull(Global_Sales)
+
+Console <- vgsales %>%
+  filter(Platform == 'Console') %>% 
+  pull(Global_Sales)
+
+sales <- vgsales %>% 
+  pull(Global_Sales)
+
+observed_diff <- mean(Console) - mean(PC)
+observed_diff
+
+length(sales)
+length(Console)
+```
+our observed difference in means was around 346,000 dollars (since global sales is recorded in millions of copies sold)
+```{r}
+N <- 10^4
+
+P_test <- numeric(N)
+for (i in 1:N){
+  index <- sample(12284, 11324, replace = FALSE)
+  P_test[i] <- mean(sales[index]) - mean(sales[-index])
+}
+
+(sum(P_test >= observed_diff) + 1)/(N+1)
+```
+Assuming the null hypothesis is true, there is a 9.999e-05 percent chance the observed difference of 0.346 or greater could have occurred by chance alone.
+
+Because the p-value is so much lower than 0.05, we have statistical evidence to reject the null, meaning we have evidence to believe there is an actual difference in the amount of global sales based on what platform the game is sold on. However, because this test is using very skewed data, this P-value likely doesn't provide convincing evidence of the difference in average global sales.
+
+# Bootstrap difference in Means
+```{r}
+Boot_test <- numeric(N)
+
+for(i in 1:N){
+  boot_pc <- sample(PC, size = length(PC), replace = TRUE)
+  boot_console <- sample(Console, size = length(Console), replace = TRUE)
+  
+  Boot_test[i] <- mean(boot_console) - mean(boot_pc)
+}
+
+hist(Boot_test)
+qqnorm(Boot_test)
+qqline(Boot_test, col = 'red')
+
+```
+Since our data was so skewed, this bootstrap interval allows us to get a better estimate of the sampling distribution of our data, which centers it around the mean difference in global sales. This makes the sampling distribution of our data appear normalized, allowing for more accurate statistical analysis.
+
+##Bias
+```{r}
+boot_diff <- mean(Boot_test)
+boot_se <- sd(Boot_test)
+
+bias <- boot_diff - observed_diff
+
+boot_se
+bias/boot_se
+```
+Since the bias of our bootstrap distribution is so low (between -0.02 & 0.02), we can assume that there is very little to no bias in this bootstrap interval, meaning our bootstrap distribution is a reliable estimate of the sampling distribution.
+
+#Bootstrap Percentile interval
+```{r}
+quantile(Boot_test, c(0.025, 0.975))
+```
+Given the bootstrapped data, we are 95% confident that the true difference in Console and PC global sales (Console - PC) is within the interval (0.295, 0.392). This means the true difference in means is between about 295,000 to 392,000 copies sold with 95% confidence.
+
+#Two-sided T-Test
+```{r}
+t.test(Console, PC, conf.level = 0.95)
+```
+Given the traditional two-sided T-test, we are 95% confident that the true difference in Console and PC global sales (Console - PC) is within the interval (0.298, 0.394). Again given 95% confidence, the true difference in means falls somewhere between 298,000 and 394,000 copies sold.
+
+#Comparing the bootstrapped and traditional confidence intervals
+Both confidence intervals are very close to each other, with both the lower bounds for the intervals being in the 290,000's and the upper bounds being in the 390,000's. This means that for both intervals, we can expect to see a true difference of means within a range of about a hundred thousand copies sold with 95% confidence. Both intervals provide convincing evidence for the alternative hypothesis, as 0 is not in both intervals and both intervals are completely positive. This means we have convincing evidence that Console games sell more copies globally than PC games, as the average number of PC copies sold is always less than the average number of Console copies sold, given that our confidence intervals are only ever positive (Since the difference of means is calculated as Console - PC). 
+
